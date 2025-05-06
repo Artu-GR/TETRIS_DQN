@@ -17,7 +17,7 @@ def train_model(episodes=5000):
     state_size = env.get_state().shape[0]
     action_size = env.action_space.n
     # print(action_size)
-    writer = SummaryWriter(log_dir="runs2/tetris_dqn")
+    writer = SummaryWriter(log_dir="runs4/tetris_dqn")
 
     # print(state_size, action_size)
 
@@ -72,10 +72,10 @@ def train_model(episodes=5000):
         writer.add_scalar("Loss", agent.last_loss, ep)
 
         if ep % agent.update_target_every == 0:
-            torch.save(agent.q_network.state_dict(), f"models3/dqn_episode_{ep}.pth")
+            torch.save(agent.q_network.state_dict(), f"models4/dqn_episode_{ep}.pth")
 
     writer.close()
-    torch.save(agent.q_network.state_dict(), f"models3/trained_model.pth")
+    torch.save(agent.q_network.state_dict(), f"models4/trained_model.pth")
 
 if __name__ == '__main__':
     train_model(episodes=10000)

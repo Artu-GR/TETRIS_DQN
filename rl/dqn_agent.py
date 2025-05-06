@@ -160,7 +160,7 @@ class DQN_Agent():
         self.epsilon_start = 1
         self.epsilon_decay_steps = 9000 # 4500
 
-        self.update_target_every = 50
+        self.update_target_every = 50 # 100
         self.step_count = 0
         self.last_loss = 0
 
