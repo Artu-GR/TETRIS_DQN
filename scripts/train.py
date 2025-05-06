@@ -2,13 +2,12 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-from rl import dqn_agent, tetris_env
-from game import Graphics
-
-import time
 import pygame
 import torch
 from torch.utils.tensorboard import SummaryWriter
+
+from rl import dqn_agent, tetris_env
+from game import Graphics
 
 pygame.init()
 
@@ -18,7 +17,7 @@ def train_model(episodes=5000):
     state_size = env.get_state().shape[0]
     action_size = env.action_space.n
     # print(action_size)
-    writer = SummaryWriter(log_dir="runs/tetris_dqn")
+    writer = SummaryWriter(log_dir="runs2/tetris_dqn")
 
     # print(state_size, action_size)
 
@@ -34,7 +33,7 @@ def train_model(episodes=5000):
         done = False
 
         while not done:
-            if ep >= 4000: clock.tick(3)
+            #clock.tick(60)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -67,15 +66,16 @@ def train_model(episodes=5000):
         # gpx.drawBoard(None, env.engine)
         # pygame.display.flip()
 
-        print(f"Episode {ep} | Total Reward: {total_reward: .3f} | Epsilon: {agent.epsilon:.3f} | Loss: {agent.last_loss:.3f} | Buffer size: {agent.replay_buffer.__len__():.3f}")
+        print(f"Episode {ep} | Total Reward: {total_reward: .3f} | Epsilon: {agent.epsilon:.3f} | Loss: {agent.last_loss:.3f} | Buffer size: {len(agent.replay_buffer):.3f}")
         writer.add_scalar("Reward/Total", total_reward, ep)
         writer.add_scalar("Epsilon", agent.epsilon, ep)
         writer.add_scalar("Loss", agent.last_loss, ep)
 
         if ep % agent.update_target_every == 0:
-            torch.save(agent.q_network.state_dict(), f"models/dqn_episode_{ep}.pth")
+            torch.save(agent.q_network.state_dict(), f"models3/dqn_episode_{ep}.pth")
 
     writer.close()
+    torch.save(agent.q_network.state_dict(), f"models3/trained_model.pth")
 
 if __name__ == '__main__':
-    train_model(episodes=5000)
+    train_model(episodes=10000)

@@ -7,29 +7,8 @@ from .Piece import Piece
 
 class GameState(): #10x20
     def __init__(self):
-        self.board = [ #Tablero / grid [[0]*10 for _ in range(20)]
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0],
-        ]
-        self.prev_board = None
+        self.board = [[0]*10 for _ in range(20)]
+        self.prev_board = [[0] * 10 for _ in range(20)]
         self.rows = 20
         self.cols = 10
         self.log = [] # For training purposes log[-1]
@@ -52,24 +31,11 @@ class GameState(): #10x20
         
         # Next Pieces
         self.nextPieces = [] # 'K' 'L' 'O'
-        self.nextPiecesGrid = [
-            [0,0,0,0], # Piece 1
-            [0,0,0,0],
-            [0,0,0,0], 
-            [0,0,0,0], # Piece 2
-            [0,0,0,0],
-            [0,0,0,0], 
-            [0,0,0,0], # Piece 3
-            [0,0,0,0],
-            [0,0,0,0]
-        ]
+        self.nextPiecesGrid = [[0]*4 for _ in range(9)]
 
         # Hold piece
         self.holdPiece = None
-        self.holdPieceGrid = [
-            [0,0,0,0],
-            [0,0,0,0]
-        ]
+        self.holdPieceGrid = [[0]*4 for _ in range(2)]
 
         # Difficulty increment
         self.SPEED_FACTOR = 1
@@ -79,8 +45,8 @@ class GameState(): #10x20
     # DQN SETUP
     def reset_game(self):
         # Reset the board and game over flag
-        self.prev_board = None
-        self.board = self.initialize_board()
+        self.prev_board = [[0] * 10 for _ in range(20)]
+        self.board = [[0]*10 for _ in range(20)]
         self.currentPiece = Piece('O')
         self.projected_coords = []
         self.score = 0
@@ -143,7 +109,9 @@ class GameState(): #10x20
             if self.moveRight() == False: break
         while self.currentPiece.col > col:
             if self.moveLeft() == False: break
-        self.dropPiece()
+        lines_cleared = self.dropPiece(return_state=True)
+
+        return lines_cleared
     
     # def calculate_reward(self):
     #     # Example logic for reward: +1 for clearing a line, etc.
@@ -167,40 +135,157 @@ class GameState(): #10x20
     #         reward -= 50
     #     return reward
     
-    def calculate_reward(self, prev_board):
-        lines_cleared = self.check_line_clear()
-        new_board = self.board
+    # def calculate_reward(self):
+    #     lines_cleared = self.check_line_clear()
+    #     if lines_cleared > 0:
+    #         return 50*lines_cleared
+    #     elif self.game_ended:
+    #         return -40
+    #     else:
+    #         return -0.5
 
-        prev_height = self.get_aggregate_height(prev_board) if prev_board is not None else 0
-        new_height = self.get_aggregate_height(new_board)
-        height_penalty = new_height - prev_height
+    def calculate_reward(self, lines_cleared, prev_board):
+        # if self.game_ended:
+        #     reward = -30
+        #     return reward
 
-        prev_holes = self.get_holes(prev_board) if prev_board is not None else 0
-        new_holes = self.get_holes(new_board)
-        hole_penalty = new_holes - prev_holes
-
+        #lines_cleared = self.check_line_clear()
         balance_penalty = self.balance_penalty()
-        center_alignment = self.center_alignment_bonus()
 
-        bumpiness = self.get_bumpiness()
+        center_height = self.center_stack_penalty()
 
-        reward = 0
-        #reward += [0, 10, 30, 60, 100][lines_cleared]
-        reward += lines_cleared * 20
-        reward += self.drop_height * 0.5
-        reward -= height_penalty * 3
-        reward -= hole_penalty * 2
-        reward -= bumpiness * 0.3
-        reward += balance_penalty
-        reward += center_alignment
+        reward = 0.1
+        reward += [0, 70, 150, 300, 500][lines_cleared]
 
-        if self.game_ended:
-            reward -= 50
+        reward -= balance_penalty * 0.2
+        reward -= center_height * 0.2
 
-        #reward = max(-1.0, min(1.0, reward / 10.0))
-        reward = max(-50, min(50, reward))
+        #time.sleep(0.5)
+
+        reward = max(-20, min(20, reward))
 
         return reward
+
+    def count_full_rows(self, board):
+        """Return how many rows are completely filled (no zeros)."""
+        return sum(1 for row in board if all(cell != 0 for cell in row))
+    
+    def column_heights(self, board):
+        """
+        For each column return the height (distance from bottom to first filled cell).
+        board is a list of rows, top row index=0.
+        """
+        rows, cols = len(board), len(board[0])
+        heights = [0]*cols
+        for c in range(cols):
+            for r in range(rows):
+                if board[r][c] != 0:
+                    heights[c] = rows - r
+                    break
+        return heights
+    
+    def bumpiness_from_heights(self, heights):
+        return sum(abs(heights[i+1] - heights[i]) for i in range(len(heights)-1))
+
+    # def calculate_reward(self, prev_board):
+    #     # if self.game_ended:
+    #     #     reward = -30
+    #     #     return reward
+        
+    #     lines_cleared = self.check_line_clear()
+    #     new_board = self.board
+
+    #     prev_height = self.get_aggregate_height(prev_board) if prev_board is not None else 0
+    #     new_height = self.get_aggregate_height(new_board)
+    #     height_penalty = new_height - prev_height
+
+    #     prev_holes = self.get_holes(prev_board) if prev_board is not None else 0
+    #     new_holes = self.get_holes(new_board)
+    #     hole_penalty = new_holes - prev_holes
+    #     bottom_rows = self.empty_cells()
+
+    #     balance_penalty = self.balance_penalty()
+    #     #center_alignment = self.center_alignment_bonus()
+    #     center_height = self.center_stack_penalty()
+    #     side_bonus = self.side_stack_bonus()
+
+    #     bumpiness = self.get_bumpiness()
+
+    #     reward = 0.1
+    #     reward += [0, 70, 150, 300, 500][lines_cleared]
+    #     # if reward > 0:
+    #     #     return reward
+    #     #reward += lines_cleared * 20
+    #     #reward += self.drop_height * 0.2
+    #     # reward -= height_penalty * 0.1
+    #     # reward -= hole_penalty * 0.5
+    #     # reward -= bumpiness * 0.2
+    #     reward += balance_penalty * 0.2
+    #     reward += center_height * 0.2
+    #     #reward += bottom_rows * 0.1
+    #     #reward += side_bonus
+    #     #reward += center_alignment
+
+    #     #center_cols = self.cols // 2 - 1, self.cols // 2
+        
+    #     # top_rows = self.board[:3]
+    #     # if any(cell != 0 for row in top_rows for cell in row):
+    #     #     reward -= 10
+
+    #     #reward = max(-1.0, min(1.0, reward / 10.0))
+    #     reward = max(-20, min(20, reward))
+
+    #     return reward
+    
+    def empty_cells(self):
+        reward = 0
+
+        for row in range(self.rows-1, self.rows-6, -1):
+            zeros_count = self.board[row].count(0)
+            if zeros_count != 10:
+                reward -= zeros_count * 2
+            #print(self.board[row], "|", zeros_count, " = ", reward)
+
+        for row in range(self.rows-6, self.rows-11, -1):
+            zeros_count = self.board[row].count(0)
+            if zeros_count != 10:
+                reward -= zeros_count * 1
+            #print(self.board[row], "|", zeros_count, " = ", reward)
+
+        for row in range(self.rows-11, self.rows-16, -1):
+            zeros_count = self.board[row].count(0)
+            if zeros_count != 10:
+                reward -= zeros_count * 0.5
+            #print(self.board[row], "|", zeros_count, " = ", reward)
+
+        #time.sleep(5)        
+
+        return reward
+
+    def center_stack_penalty(self):
+        center_cols = [3, 4, 5, 6]
+        #center_height = sum([self.get_column_heights()[c] for c in center_cols])
+        #reward -= center_height * 2
+        #center_col = self.cols // 2
+        height = 0
+        for row in range(self.rows):
+            for col in center_cols:
+                if self.board[row][col] != 0:
+                    height = self.rows - row
+                    break
+
+        return height # Adjust weight
+    
+    def side_stack_bonus(self):
+        side_cols = [0, 1, 2, 7, 8, 9]
+        bonus = 0
+        for col in side_cols:
+            for row in range(self.rows):
+                if self.board[row][col] != 0:
+                    height = self.rows - row
+                    bonus += height
+                    break
+        return bonus * 0.3  # adjust weight
 
     def get_aggregate_height(self, board):
         heights = []
@@ -249,7 +334,7 @@ class GameState(): #10x20
         # count how many lines you cleared this step:
         lines_cleared = self.clearFullRows(return_count=True)
         if lines_cleared > 0:
-            print("*****\nLINES CLEARED\n*****\a")
+            print(f"*****\n{lines_cleared} LINES CLEARED\n*****\a")
             time.sleep(2)
         return lines_cleared
     
@@ -257,8 +342,8 @@ class GameState(): #10x20
         column_heights = self.get_column_heights()  # Call once and reuse
 
         # Split the heights into left and right halves
-        left_heights = column_heights[:self.cols // 2]  # First half
-        right_heights = column_heights[self.cols // 2:]  # Second half
+        left_heights = column_heights[:4]  # First half
+        right_heights = column_heights[6:]  # Second half
         
         left_avg = sum(left_heights) / len(left_heights)
         right_avg = sum(right_heights) / len(right_heights)
@@ -270,13 +355,7 @@ class GameState(): #10x20
         #     return -(right_avg - left_avg) * 10
         # else:
         #     return (right_avg - left_avg) * 10
-        return -balance_diff * 0.5  # Tune multiplier as needed
-    
-    def center_alignment_bonus(self):
-        heights = self.get_column_heights()
-        center = self.cols // 2
-        weighted_sum = sum(h * abs(center - i) for i, h in enumerate(heights))
-        return -weighted_sum * 0.05  # penalize distance from center
+        return balance_diff * 1.5  # Tune multiplier as needed
 
     def get_column_heights(self):
         # Initialize a list to store the heights of each column
@@ -382,17 +461,18 @@ class GameState(): #10x20
                 if self.lock_delay >= self.LOCK_LIMIT:
                     self.placePiece()
 
-    def placePiece(self):
+    def placePiece(self, return_state=False):
         for r, c in self.currentPiece.get_cells():
             if 0 <= r < self.rows and 0 <= c < self.cols:
                 self.board[r][c] = self.currentPiece.type
 
         # Spawn a new piece
         self.drop_height = 0
-        self.clearFullRows()
+        lines_cleared = self.clearFullRows(return_count=True)
         self.spawnPieces()
         self.log.clear()
         self.hold_used = False
+        if return_state: return lines_cleared
 
     def getProjection(self):
         # Clone the current piece to avoid modifying the original
@@ -433,6 +513,9 @@ class GameState(): #10x20
         self.score += 100*count
 
         if return_count:
+            if count:
+                print(f"*****\n{count} LINES CLEARED\n*****")
+                time.sleep(2)
             return count
 
     def rotatePiece(self):
@@ -634,7 +717,7 @@ class GameState(): #10x20
             else:
                 self.board[r][c] = self.currentPiece.type
 
-    def dropPiece(self):
+    def dropPiece(self, return_state=False):
         count = 0
         current_positions = self.currentPiece.get_cells()
         while True:
@@ -660,5 +743,6 @@ class GameState(): #10x20
                 self.log.append('D')
                 self.drop_height = count
                 self.score += 2*count
-                self.placePiece()  # Lock the piece and spawn a new one
+                lines_cleared = self.placePiece(return_state=True)  # Lock the piece and spawn a new one
+                if return_state: return lines_cleared
                 break  # Exit the loop since the piece has been locked

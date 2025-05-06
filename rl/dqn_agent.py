@@ -1,25 +1,21 @@
-
+import random
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import random
-import numpy as np
 
 from collections import deque
 
 class QNetwork(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(QNetwork, self).__init__()
-        self.fc1 = nn.Linear(input_size, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, output_size)
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        return self.fc4(x)
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 256), nn.ReLU(),
+            nn.Linear(256, 256), nn.ReLU(),
+            nn.Linear(256, 128), nn.ReLU(),
+            nn.Linear(128, output_dim)
+        )
+    def forward(self, x): return self.net(x)
     
 # class ReplayBuffer():
 #     def __init__(self, capacity):
@@ -152,7 +148,7 @@ class DQN_Agent():
 
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=1e-4)
         #self.replay_buffer = ReplayBuffer(capacity=100000)
-        self.replay_buffer = PrioritizedReplayBuffer(capacity=75000, alpha=0.6)
+        self.replay_buffer = PrioritizedReplayBuffer(capacity=250000, alpha=0.6)
 
         self.batch_size = 64
         self.gamma = 0.99
@@ -162,9 +158,9 @@ class DQN_Agent():
         self.epsilon_decay = 0.995
         self.epsilon_min = 0.01
         self.epsilon_start = 1
-        self.epsilon_decay_steps = 4000 # 4500
+        self.epsilon_decay_steps = 9000 # 4500
 
-        self.update_target_every = 100
+        self.update_target_every = 50
         self.step_count = 0
         self.last_loss = 0
 
@@ -214,54 +210,7 @@ class DQN_Agent():
     def update_target_network(self):
         self.target_network.load_state_dict(self.q_network.state_dict())
 
-    # def update(self, episode):
-    #     if self.replay_buffer.size() < 5000:
-    #         return
-        
-    #     #batch = self.replay_buffer.sample(self.batch_size)
-    #     batch, idxs, is_weights = self.replay_buffer.sample(self.batch_size, beta=beta)
-    #     states, actions, rewards, next_states, dones = zip(*batch)
-
-    #     states = torch.FloatTensor(np.array(states)).to(self.device) # Shape: (batch_size, 224)
-    #     actions = torch.tensor(actions, dtype=torch.long).unsqueeze(1).to(self.device)
-    #     rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
-    #     next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
-    #     dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
-
-    #     q_values = self.q_network(states).gather(1, actions)
-
-    #     # with torch.no_grad():
-    #     #     next_q_values = self.target_network(next_states).max(1)[0].unsqueeze(1)
-    #     #     target_q = rewards + self.gamma * next_q_values * (1 - dones)
-
-    #     with torch.no_grad():
-    #         next_q = self.target_network(next_states).max(1)[0].unsqueeze(1)
-    #         target_q = rewards + (self.gamma ** self.n_step) * next_q * (1 - dones)
-
-    #     loss = nn.MSELoss()(q_values, target_q)
-
-    #     self.optimizer.zero_grad()
-    #     loss.backward()
-    #     self.optimizer.step()
-
-    #     self.step_count += 1
-    #     if self.step_count % self.update_target_every == 0:
-    #         self.update_target_network()
-
-    #     #Epsilon decay
-    #     #self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
-    #     self.epsilon = max(
-    #         self.epsilon_min,
-    #         self.epsilon_start - (episode / self.epsilon_decay_steps) * (self.epsilon_start - self.epsilon_min)
-    #     )
-
-    #     self.last_loss = loss.item()
-
-    def update(self, episode, beta=0.4):
-        # don’t start until we have plenty of experience
-        # if len(self.replay_buffer) < 1000:
-        #     return
-        
+    def update(self, episode, beta=0.4):        
         # 1) don’t start unless we can sample a full batch
         if len(self.replay_buffer) < self.batch_size:
             return
@@ -295,10 +244,13 @@ class DQN_Agent():
         with torch.no_grad():
             next_q   = self.target_network(next_states).max(1)[0].unsqueeze(1)
             target_q = rewards + (self.gamma ** self.n_step) * next_q * (1 - dones)
+            #target = rewards + self.gamma * next_q * (1 - dones)
 
         # 4) weighted MSE loss
         td_errors = (target_q - q_values).detach().cpu().squeeze().numpy()
-        loss = (weights * (q_values - target_q).pow(2)).mean()
+
+        loss = (nn.SmoothL1Loss()(q_values, target_q))
+        #loss = (weights * (q_values - target_q).pow(2)).mean()
 
         # 5) gradient step
         self.optimizer.zero_grad()
@@ -314,8 +266,9 @@ class DQN_Agent():
             self.update_target_network()
 
         # 8) decay ε
+        #if episode > 500:
         self.epsilon = max(
             self.epsilon_min,
-            self.epsilon_start - (episode / self.epsilon_decay_steps) * (self.epsilon_start - self.epsilon_min)
+            self.epsilon_start - ((episode) / self.epsilon_decay_steps) * (self.epsilon_start - self.epsilon_min)
         )
         self.last_loss = loss.item()
