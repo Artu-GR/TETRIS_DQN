@@ -148,19 +148,19 @@ class DQN_Agent():
 
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=1e-4)
         #self.replay_buffer = ReplayBuffer(capacity=100000)
-        self.replay_buffer = PrioritizedReplayBuffer(capacity=250000, alpha=0.6)
+        self.replay_buffer = PrioritizedReplayBuffer(capacity=100000, alpha=0.6)
 
         self.batch_size = 64
         self.gamma = 0.99
 
         #Epsilon decay handling
         self.epsilon = 1.0
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.997
         self.epsilon_min = 0.01
         self.epsilon_start = 1
-        self.epsilon_decay_steps = 9000 # 4500
+        self.epsilon_decay_steps = 4500 # 4500
 
-        self.update_target_every = 50 # 100
+        self.update_target_every = 100 # 100
         self.step_count = 0
         self.last_loss = 0
 

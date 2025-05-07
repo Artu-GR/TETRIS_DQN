@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from rl import dqn_agent, tetris_env
 from game import Graphics
+from services import utils
 
 pygame.init()
 
@@ -25,7 +26,24 @@ def train_model(episodes=5000):
 
     clock = pygame.time.Clock()
 
-    for ep in range(episodes):
+    # start_episode = 0
+    # best_score = -float('inf')
+    ckpt_path     = "checkpoints/checkpoint.pth.tar"
+
+    try:
+        start_episode, best_score = utils.load_checkpoint(
+            ckpt_path,
+            model     = agent.q_network,
+            optimizer = agent.optimizer,
+            memory    = agent.replay_buffer
+        )
+        print(f"Resumed from ep {start_episode}, best_score={best_score:.3f}")
+    except Exception as e:
+        print(f"Failed to load checkpoint '{ckpt_path}': {e}")
+        start_episode = 0
+        best_score    = -float('inf')
+
+    for ep in range(start_episode, episodes):
         state = env.reset_game()
         gpx.draw_training(env.engine)
         pygame.display.flip()
@@ -53,7 +71,7 @@ def train_model(episodes=5000):
             env.engine.update()
             gpx.drawBoard(None, env.engine)
             pygame.display.flip()
-            
+
             # agent.update(ep)
             try:
                 agent.update(ep)
@@ -71,11 +89,24 @@ def train_model(episodes=5000):
         writer.add_scalar("Epsilon", agent.epsilon, ep)
         writer.add_scalar("Loss", agent.last_loss, ep)
 
-        if ep % agent.update_target_every == 0:
-            torch.save(agent.q_network.state_dict(), f"models4/dqn_episode_{ep}.pth")
+        is_best = total_reward > best_score
+        if is_best:
+            best_score = total_reward
+            print("UPDATED MODEL")
+
+        utils.save_checkpoint({
+            'epoch': ep,
+            'state_dict': agent.q_network.state_dict(),
+            'optimizer': agent.optimizer.state_dict(),
+            'memory': agent.replay_buffer,
+            'best_score': best_score,
+        }, is_best)
+
+        # if ep % agent.update_target_every == 0:
+        #     torch.save(agent.q_network.state_dict(), f"models4/dqn_episode_{ep}.pth")
 
     writer.close()
-    torch.save(agent.q_network.state_dict(), f"models4/trained_model.pth")
+    torch.save(agent.q_network.state_dict(), f"checkpoints/trained_model.pth")
 
 if __name__ == '__main__':
-    train_model(episodes=10000)
+    train_model(episodes=5000)

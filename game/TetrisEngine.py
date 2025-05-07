@@ -155,10 +155,10 @@ class GameState(): #10x20
         center_height = self.center_stack_penalty()
 
         reward = 0.1
-        reward += [0, 70, 150, 300, 500][lines_cleared]
+        reward += [0, 20, 50, 70, 100][lines_cleared]
 
-        reward -= balance_penalty * 0.2
-        reward -= center_height * 0.2
+        reward -= balance_penalty * 0.3
+        reward -= center_height * 0.3
 
         #time.sleep(0.5)
 
