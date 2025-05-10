@@ -95,7 +95,6 @@ class PrioritizedReplayBuffer:
         priority = (abs(td_error) + self.eps)**self.alpha if td_error is not None else max_priority
         self.tree.add(priority, transition)
 
-
     def sample(self, batch_size, beta=0.4):
         if self.tree.total() == 0:
             print("SumTree total priority is zero!")
@@ -109,16 +108,15 @@ class PrioritizedReplayBuffer:
             s = random.uniform(i*seg, (i+1)*seg)
             idx, p, data = self.tree.get(s)
 
-            # if data is None:
-            #         print(f"Warning: Got None from tree.get({s}) at segment {i}")
-            #         continue  # Skip this one — or handle differently
+            if data is None:
+                print(f"Warning: Got None from tree.get({s}) at segment {i}")
+                continue  # Skip this one — or handle differently
             
             batch.append(data)
             idxs.append(idx)
             priorities.append(p)
 
         if not batch:
-            print("EMPTY BATCH 2")
             return [], [], []
         #sampling_prob = np.array(priorities) / self.tree.total()
         sampling_prob = np.array(priorities) / self.tree.total()
@@ -148,7 +146,7 @@ class DQN_Agent():
 
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=1e-4)
         #self.replay_buffer = ReplayBuffer(capacity=100000)
-        self.replay_buffer = PrioritizedReplayBuffer(capacity=100000, alpha=0.6)
+        self.replay_buffer = PrioritizedReplayBuffer(capacity=100000, alpha=0.6) # 100k size buffer (for 100k games training)
 
         self.batch_size = 64
         self.gamma = 0.99
@@ -156,11 +154,11 @@ class DQN_Agent():
         #Epsilon decay handling
         self.epsilon = 1.0
         self.epsilon_decay = 0.997
-        self.epsilon_min = 0.01
+        self.epsilon_min = 0.05
         self.epsilon_start = 1
-        self.epsilon_decay_steps = 4500 # 4500
+        self.epsilon_decay_steps = 80000 # 80k
 
-        self.update_target_every = 100 # 100
+        self.update_target_every = 1000 # 1k
         self.step_count = 0
         self.last_loss = 0
 
@@ -177,23 +175,43 @@ class DQN_Agent():
 
         return q_values.argmax().item()
 
-    # def store_transition(self, state, action, reward, next_state, done):
-    #     self.replay_buffer.push(state, action, reward, next_state, done)
     def store_transition(self, state, action, reward, next_state, done):
-        # push into n-step buffer
-        self.n_buffer.append((state, action, reward, next_state, done))
-        #print("Replay Buffer Size:", len(self.replay_buffer))
+        # build transition tuple
+        #td_error = reward + (np.random.rand() * 0.7)
+        transition = (state, action, reward, next_state, done)
+
+        # n-step logic (unchanged)
+        self.n_buffer.append(transition)
         if len(self.n_buffer) == self.n_step:
-            r, ns, d = self._get_n_step_info()
+            R, ns, d = self._get_n_step_info()
             s0, a0, _, _, _ = self.n_buffer[0]
-            self.replay_buffer.push((s0, a0, r, ns, d))
+            t0 = (s0, a0, R, ns, d)
+
+            with torch.no_grad():
+                s0_tensor = torch.tensor(s0, dtype=torch.float32).unsqueeze(0).to(self.device)
+                ns_tensor = torch.tensor(ns, dtype=torch.float32).unsqueeze(0).to(self.device)
+
+                q_value = self.q_network(s0_tensor)[0, action].item()
+                next_q_value = self.target_network(ns_tensor).max(1)[0].item() if not d else 0.0
+                td_error = reward + self.gamma * next_q_value - q_value
+
+            self.replay_buffer.push(t0, td_error)
 
         if done:
-            # flush remaining
             while len(self.n_buffer) > 0:
-                r, ns, d = self._get_n_step_info()
+                R, ns, d = self._get_n_step_info()
                 s0, a0, _, _, _ = self.n_buffer[0]
-                self.replay_buffer.push((s0, a0, r, ns, d))
+                t0 = (s0, a0, R, ns, d)
+
+                with torch.no_grad():
+                    s0_tensor = torch.tensor(s0, dtype=torch.float32).unsqueeze(0).to(self.device)
+                    ns_tensor = torch.tensor(ns, dtype=torch.float32).unsqueeze(0).to(self.device)
+
+                    q_value = self.q_network(s0_tensor)[0, action].item()
+                    next_q_value = self.target_network(ns_tensor).max(1)[0].item() if not d else 0.0
+                    td_error = reward + self.gamma * next_q_value - q_value
+
+                self.replay_buffer.push(t0, td_error)
                 self.n_buffer.popleft()
 
     def _get_n_step_info(self):
@@ -223,6 +241,7 @@ class DQN_Agent():
         # 3) if sampling somehow fails or returns too few, bail out
         sample = self.replay_buffer.sample(self.batch_size, beta=beta)
         if (sample is None) or (len(sample[0]) < self.batch_size):
+            #raise ValueError('Not enough states')
             return
         batch, idxs, is_weights = sample
 
@@ -255,7 +274,9 @@ class DQN_Agent():
         # 5) gradient step
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=1.0)
         self.optimizer.step()
+        #loss = torch.clamp(loss, min=-1.0, max=1.0)
 
         # 6) update priorities in buffer
         self.replay_buffer.update_priorities(idxs, td_errors)
@@ -266,9 +287,95 @@ class DQN_Agent():
             self.update_target_network()
 
         # 8) decay ε
-        #if episode > 500:
         self.epsilon = max(
             self.epsilon_min,
             self.epsilon_start - ((episode) / self.epsilon_decay_steps) * (self.epsilon_start - self.epsilon_min)
         )
         self.last_loss = loss.item()
+
+    # def update(self, episode, beta=0.4):
+    #     # must have enough samples in both buffers
+    #     half = self.batch_size // 2
+    #     # print("HALF = ", half)
+    #     # print(len(self.replay_buffer))
+    #     # print(len(self.good_buffer))
+    #     if len(self.replay_buffer) < half or len(self.good_buffer) < half:
+    #         #print("BUFFER NOT BIG ENOUGH")
+    #         return
+    #         #raise ValueError('Buffer not big enough')
+        
+    #     replay_total = float(self.replay_buffer.tree.total())
+    #     good_total   = float(self.good_buffer.tree.total())
+    #     total_p      = replay_total + good_total
+
+    #     total_p = replay_total + good_total
+    #     if total_p <= 0:
+    #         return
+    #         #raise ValueError('Total_p <= 0')
+ 
+    #     # 3) if sampling somehow fails or returns too few, bail out
+    #     # good_sample = self.good_buffer.sample(half, beta)
+    #     # all_sample = self.replay_buffer.sample(self.batch_size, beta=beta)
+    #     # if (all_sample is None) or (len(all_sample[0]) < self.batch_size) or (good_sample is None) or len(good_sample[0] < self.batch_size):
+    #     #     raise ValueError("Sample is None | len(sample) too short")
+        
+    #     good =  self.good_buffer.sample(half, beta)
+    #     all = self.replay_buffer.sample(half, beta)
+
+    #     # 4) bail out if either sample was too small
+    #     if good is None:
+    #         #return
+    #         raise ValueError("Good Sample is None | len(sample) too short")
+    #     if all is None:
+    #         #return
+    #         raise ValueError("All Sample is None | len(sample) too short")
+
+    #     good_batch, idxs_good, w_good = good#[],[],[]#good
+    #     all_batch,  idxs_all,  w_all  = all
+
+    #     # combine
+    #     batch   = good_batch + all_batch
+    #     idxs    = idxs_good  + idxs_all
+    #     weights = np.concatenate([w_good, w_all], axis=0)
+
+    #     # unpack
+    #     states, actions, rewards, next_states, dones = zip(*batch)
+    #     states      = torch.FloatTensor(np.array(states)).to(self.device)
+    #     actions     = torch.LongTensor(actions).unsqueeze(1).to(self.device)
+    #     rewards     = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
+    #     next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
+    #     dones       = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
+    #     weights     = torch.FloatTensor(weights).unsqueeze(1).to(self.device)
+
+    #     # current Q
+    #     q_values = self.q_network(states).gather(1, actions)
+    #     # target Q
+    #     with torch.no_grad():
+    #         next_q   = self.target_network(next_states).max(1)[0].unsqueeze(1)
+    #         target_q = rewards + (self.gamma ** self.n_step) * next_q * (1 - dones)
+
+    #     # compute loss
+    #     td_errors = (target_q - q_values).detach().cpu().squeeze().numpy()
+    #     loss = (weights * (q_values - target_q).pow(2)).mean()
+
+    #     # backprop + clip
+    #     self.optimizer.zero_grad()
+    #     loss.backward()
+    #     torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=1.0)
+    #     self.optimizer.step()
+
+    #     # update priorities
+    #     self.replay_buffer.update_priorities(idxs, td_errors) #idxs = idxs_good+idxs_all
+    #     self.good_buffer.update_priorities(idxs_good, td_errors[:len(idxs_good)])
+
+    #     # sync target network
+    #     self.step_count += 1
+    #     if self.step_count % self.update_target_every == 0:
+    #         self.update_target_network()
+
+    #     # decay epsilon
+    #     self.epsilon = max(
+    #         self.epsilon_min,
+    #         self.epsilon_start - (episode / self.epsilon_decay_steps) * (self.epsilon_start - self.epsilon_min)
+    #     )
+    #     self.last_loss = loss.item()

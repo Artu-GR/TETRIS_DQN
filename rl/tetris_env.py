@@ -45,8 +45,9 @@ class TetrisEnv():
         state = np.concatenate([board, [current_piece], next_pieces, [hold_piece]]).astype(np.float32)
         return state
     
-    def step(self, action):
+    def step(self, action, gpx):
         # action_str = self.action_map[action]
+        lines_cleared = 0
 
         prev_board = copy.deepcopy(self.engine.board)
 
@@ -59,7 +60,7 @@ class TetrisEnv():
             self.engine.hold_Piece()
             reward = 0 # 0.1
         else:
-            lines_cleared = self.engine.place_piece(rotation, target_col)
+            lines_cleared = self.engine.place_piece(rotation, target_col, gpx)
 
             # reward, done = self.engine.perform_action(action_str, prev_board)
             reward = self.engine.calculate_reward(lines_cleared, prev_board)
@@ -69,4 +70,4 @@ class TetrisEnv():
 
         next_state = self.get_state()
 
-        return next_state, reward, done, {}
+        return next_state, reward, done, {'lines_cleared': lines_cleared}
