@@ -45,7 +45,7 @@ class TetrisEnv():
         state = np.concatenate([board, [current_piece], next_pieces, [hold_piece]]).astype(np.float32)
         return state
     
-    def step(self, action, gpx):
+    def step(self, ep, action, gpx):
         # action_str = self.action_map[action]
         lines_cleared = 0
 
@@ -63,7 +63,7 @@ class TetrisEnv():
             lines_cleared = self.engine.place_piece(rotation, target_col, gpx)
 
             # reward, done = self.engine.perform_action(action_str, prev_board)
-            reward = self.engine.calculate_reward(lines_cleared, prev_board)
+            reward = self.engine.calculate_reward(ep, lines_cleared, prev_board)
             #reward = self.engine.calculate_reward()
 
         done = self.engine.game_ended

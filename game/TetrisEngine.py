@@ -87,27 +87,6 @@ class GameState(): #10x20
         # Return the current board
         return self.board
     
-    # def perform_action(self, action, board):
-    #     # Implement your action logic here (e.g., move left, rotate, etc.)
-    #     if action == 'L':
-    #         self.moveLeft()
-    #     elif action == 'R':
-    #         self.moveRight()
-    #     elif action == 'd':
-    #         self.moveDown()
-    #     elif action == 'D':
-    #         self.dropPiece()
-    #     elif action == 'r':
-    #         self.rotatePiece()
-    #     elif action == 'C':
-    #         self.hold_Piece()
-        
-    #     # Calculate reward and done flag
-    #     reward = self.calculate_reward(board)  # Example: a function that calculates the reward
-    #     done = self.check_game_over()  # Check if the game is over
-
-        # return reward, done
-    
     def place_piece(self, rotation, col, gpx):
         for _ in range(rotation % 4):
             self.rotatePiece()
@@ -119,86 +98,73 @@ class GameState(): #10x20
 
         return lines_cleared
 
-    def calculate_reward(self, lines_cleared, prev_board):
-        if self.check_game_over():
-            return -1
-        
-        holes_pen = self.count_holes()
-
+    def calculate_reward(self, ep, lines_cleared, prev_board):
         reward = 0
-        reward += lines_cleared*2.5 #[0, 10, 20, 30, 70][lines_cleared]
-        #reward -= holes_pen*0.5
+
+        new_board = self.board
+
+        prev_holes = self.get_holes(prev_board)
+        new_holes = self.get_holes(new_board)
+
+        prev_bumpiness, prev_height = self.get_bumpiness_and_heights(prev_board)
+        new_bumpiness, new_height = self.get_bumpiness_and_heights(new_board)
+
+        factor = min(1.0, ep / 7000)
+        hole_weight = 0.2 * factor
+        bumpiness_weight = 0.05 * factor
+        height_weight = 0.1 * factor
+
+        # TO TRY
+        # hole_weight = 0.05 * factor
+        # bumpiness_weight = 0.0125 * factor
+        # height_weight = 0.025 * factor
+
+        reward_factor = 5 + (min(10, ep/200))
+        # TO TRY
+        # reward_factor = 10 + (min(20, ep/400))
+        reward += lines_cleared * reward_factor
+
+        reward -= hole_weight * (new_holes - prev_holes)
+        reward -= bumpiness_weight * (new_bumpiness - prev_bumpiness)
+        reward -= height_weight * (new_height - prev_height)
+
+        if self.game_ended:
+            reward -= 10
+
+        reward += 0.01
 
         return reward
+
+        # reward = 0
+        # reward += lines_cleared*2.5 #[0, 10, 20, 30, 70][lines_cleared]
+        # #reward -= holes_pen*0.5
+
+        # return reward
     
-    def count_holes(self):
+    def get_holes(self, board):
         holes = 0
-        for col in range(len(self.board[0])):  # Assume width = len of a row
+        for col in range(len(board[0])):
             block_found = False
-            for row in range(len(self.board)):
-                if self.board[row][col] != 0:
+            for row in range(len(board)):
+                if board[row][col] != 0:
                     block_found = True
                 elif block_found:
-                    holes += 0.1
+                    holes += 1
 
-        return holes*0.2
+        return holes
 
-    # def check_holes_penalty(self):
-    #     penalty = 0
-    #     for i,row in enumerate(self.board):
-    #         if i >= 5 and i < 10:
-    #             penalty += row.count(0) * 0.3
-    #         if i >= 10 and i < 15:
-    #             penalty += row.count(0) * 0.5
-    #         if i >= 15:
-    #             penalty += row.count(0) * 0.7
-        
-    #     return penalty*0.5
-
-    def center_stack_penalty(self):
-        center_cols = [3, 4, 5, 6]
-
-        height = 0
-        for row in range(self.rows):
-            for col in center_cols:
-                if self.board[row][col] != 0:
-                    height = self.rows - row
+    def get_bumpiness_and_heights(self, board):
+        heights = []
+        for col in range(len(board[0])):
+            col_height = 0
+            for row in range(len(board)):
+                if board[row][col] != 0:
+                    col_height = len(board) - row
                     break
+            heights.append(col_height)
+        bumpiness = sum(abs(heights[i] - heights[i+1]) for i in range(len(heights)-1))
 
-        return height # Adjust weight
-
-    def check_game_over(self):
-        # Check if the game is over
-        return self.game_ended
-    
-    def balance_penalty(self):
-        column_heights = self.get_column_heights()  # Call once and reuse
-
-        # Split the heights into left and right halves
-        left_heights = column_heights[:4]  # First half
-        right_heights = column_heights[6:]  # Second half
-        
-        left_avg = sum(left_heights) / len(left_heights)
-        right_avg = sum(right_heights) / len(right_heights)
-
-        # Penalize if one side is significantly higher than the other
-        balance_diff = abs(left_avg - right_avg)
-
-        return balance_diff * 1.5  # Tune multiplier as needed
-
-    def get_column_heights(self):
-        # Initialize a list to store the heights of each column
-        heights = [0] * self.cols
-
-        # Iterate over each column
-        for col in range(self.cols):
-            # Iterate over the rows in this column, starting from the bottom
-            for row in range(self.rows - 1, -1, -1):
-                if self.board[row][col] != 0:  # If the cell is filled
-                    heights[col] = self.rows - row  # Height is distance from the bottom
-                    break  # No need to check above this row, we've found the height
-
-        return heights
+        return bumpiness, max(heights)
 
     # GAME LOGIC
     def spawnPieces(self):

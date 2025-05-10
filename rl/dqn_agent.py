@@ -1,5 +1,9 @@
+import os
 import random
+import copy
+import json
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -139,6 +143,7 @@ class DQN_Agent():
         self.action_size = action_size
         self.device = device
 
+        self.q_diff = 0
         self.q_network = QNetwork(state_size, action_size).to(device)
         self.target_network = QNetwork(state_size, action_size).to(device)
         self.target_network.load_state_dict(self.q_network.state_dict())
@@ -158,7 +163,7 @@ class DQN_Agent():
         self.epsilon_start = 1
         self.epsilon_decay_steps = 80000 # 80k
 
-        self.update_target_every = 1000 # 1k
+        self.update_target_every = 1500 # 1k
         self.step_count = 0
         self.last_loss = 0
 
@@ -265,6 +270,8 @@ class DQN_Agent():
             target_q = rewards + (self.gamma ** self.n_step) * next_q * (1 - dones)
             #target = rewards + self.gamma * next_q * (1 - dones)
 
+        self.q_diff = torch.abs(q_values - target_q).mean()
+
         # 4) weighted MSE loss
         td_errors = (target_q - q_values).detach().cpu().squeeze().numpy()
 
@@ -293,89 +300,79 @@ class DQN_Agent():
         )
         self.last_loss = loss.item()
 
-    # def update(self, episode, beta=0.4):
-    #     # must have enough samples in both buffers
-    #     half = self.batch_size // 2
-    #     # print("HALF = ", half)
-    #     # print(len(self.replay_buffer))
-    #     # print(len(self.good_buffer))
-    #     if len(self.replay_buffer) < half or len(self.good_buffer) < half:
-    #         #print("BUFFER NOT BIG ENOUGH")
-    #         return
-    #         #raise ValueError('Buffer not big enough')
-        
-    #     replay_total = float(self.replay_buffer.tree.total())
-    #     good_total   = float(self.good_buffer.tree.total())
-    #     total_p      = replay_total + good_total
+class DQNTrainingLogger:
+    def __init__(self, log_dir="logs"):
+        self.log_dir = log_dir
+        os.makedirs(log_dir, exist_ok=True)
 
-    #     total_p = replay_total + good_total
-    #     if total_p <= 0:
-    #         return
-    #         #raise ValueError('Total_p <= 0')
- 
-    #     # 3) if sampling somehow fails or returns too few, bail out
-    #     # good_sample = self.good_buffer.sample(half, beta)
-    #     # all_sample = self.replay_buffer.sample(self.batch_size, beta=beta)
-    #     # if (all_sample is None) or (len(all_sample[0]) < self.batch_size) or (good_sample is None) or len(good_sample[0] < self.batch_size):
-    #     #     raise ValueError("Sample is None | len(sample) too short")
-        
-    #     good =  self.good_buffer.sample(half, beta)
-    #     all = self.replay_buffer.sample(half, beta)
+        self.rewards = []
+        self.losses = []
+        self.param_changes = []
 
-    #     # 4) bail out if either sample was too small
-    #     if good is None:
-    #         #return
-    #         raise ValueError("Good Sample is None | len(sample) too short")
-    #     if all is None:
-    #         #return
-    #         raise ValueError("All Sample is None | len(sample) too short")
+    def log_reward(self, reward):
+        self.rewards.append(reward)
 
-    #     good_batch, idxs_good, w_good = good#[],[],[]#good
-    #     all_batch,  idxs_all,  w_all  = all
+    def log_loss(self, loss):
+        self.losses.append(loss)
 
-    #     # combine
-    #     batch   = good_batch + all_batch
-    #     idxs    = idxs_good  + idxs_all
-    #     weights = np.concatenate([w_good, w_all], axis=0)
+    def log_param_change(self, q_net, target_net):
+        q_params = np.concatenate([p.data.cpu().numpy().flatten() for p in q_net.parameters()])
+        target_params = np.concatenate([p.data.cpu().numpy().flatten() for p in target_net.parameters()])
+        change = np.mean(np.abs(q_params - target_params))
+        self.param_changes.append(change)
 
-    #     # unpack
-    #     states, actions, rewards, next_states, dones = zip(*batch)
-    #     states      = torch.FloatTensor(np.array(states)).to(self.device)
-    #     actions     = torch.LongTensor(actions).unsqueeze(1).to(self.device)
-    #     rewards     = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
-    #     next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
-    #     dones       = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
-    #     weights     = torch.FloatTensor(weights).unsqueeze(1).to(self.device)
+    def save(self):
+        rewards_py = [float(r) for r in self.rewards]
+        losses_py = [float(l) for l in self.losses]
+        param_changes_py = [float(p) for p in self.param_changes]
 
-    #     # current Q
-    #     q_values = self.q_network(states).gather(1, actions)
-    #     # target Q
-    #     with torch.no_grad():
-    #         next_q   = self.target_network(next_states).max(1)[0].unsqueeze(1)
-    #         target_q = rewards + (self.gamma ** self.n_step) * next_q * (1 - dones)
+        with open(os.path.join(self.log_dir, "training_logs.json"), "w") as f:
+            json.dump({
+                "rewards": rewards_py,
+                "losses": losses_py,
+                "param_changes": param_changes_py
+            }, f)
 
-    #     # compute loss
-    #     td_errors = (target_q - q_values).detach().cpu().squeeze().numpy()
-    #     loss = (weights * (q_values - target_q).pow(2)).mean()
+    def load(self):
+        with open(os.path.join(self.log_dir, "training_logs.json"), "r") as f:
+            data = json.load(f)
+            self.rewards = data["rewards"]
+            self.losses = data["losses"]
+            self.param_changes = data["param_changes"]
 
-    #     # backprop + clip
-    #     self.optimizer.zero_grad()
-    #     loss.backward()
-    #     torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=1.0)
-    #     self.optimizer.step()
+    def plot(self, ep, save_only=True):
+        if save_only:
+            import matplotlib
+            matplotlib.use('Agg')  # Use non-interactive backend
+        #import matplotlib.pyplot as plt
 
-    #     # update priorities
-    #     self.replay_buffer.update_priorities(idxs, td_errors) #idxs = idxs_good+idxs_all
-    #     self.good_buffer.update_priorities(idxs_good, td_errors[:len(idxs_good)])
+        episodes = range(len(self.rewards))
 
-    #     # sync target network
-    #     self.step_count += 1
-    #     if self.step_count % self.update_target_every == 0:
-    #         self.update_target_network()
+        fig, axs = plt.subplots(3, 1, figsize=(12, 10))
 
-    #     # decay epsilon
-    #     self.epsilon = max(
-    #         self.epsilon_min,
-    #         self.epsilon_start - (episode / self.epsilon_decay_steps) * (self.epsilon_start - self.epsilon_min)
-    #     )
-    #     self.last_loss = loss.item()
+        axs[0].plot(episodes, self.rewards, label="Average Reward")
+        axs[0].set_title("Reward per Episode")
+        axs[0].set_ylabel("Reward")
+        axs[0].grid()
+
+        axs[1].plot(range(len(self.losses)), self.losses, label="Loss")
+        axs[1].set_title("Loss over Time")
+        axs[1].set_ylabel("Loss")
+        axs[1].grid()
+
+        axs[2].plot(range(len(self.param_changes)), self.param_changes, label="Parameter Change")
+        axs[2].set_title("Target Network Parameter Change")
+        axs[2].set_ylabel("|Q - Target| Mean")
+        axs[2].grid()
+
+        for ax in axs:
+            ax.legend()
+
+        axs[2].set_xlabel("Episodes")
+        plt.tight_layout()
+
+        if save_only:
+            plt.savefig(os.path.join(self.log_dir, f"training_plot_ep{ep}.png"))
+            plt.close(fig)  # Close to free memory and avoid Tkinter errors
+        else:
+            plt.show()
