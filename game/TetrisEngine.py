@@ -110,26 +110,26 @@ class GameState(): #10x20
         new_bumpiness, new_height = self.get_bumpiness_and_heights(new_board)
 
         factor = min(1.0, ep / 7000)
-        hole_weight = 0.2 * factor
-        bumpiness_weight = 0.05 * factor
-        height_weight = 0.1 * factor
+        # hole_weight = 0.2 * factor
+        # bumpiness_weight = 0.05 * factor
+        # height_weight = 0.1 * factor
 
         # TO TRY
-        # hole_weight = 0.05 * factor
-        # bumpiness_weight = 0.0125 * factor
-        # height_weight = 0.025 * factor
+        hole_weight = 0.05 * factor
+        bumpiness_weight = 0.0125 * factor
+        height_weight = 0.025 * factor
 
-        reward_factor = 5 + (min(10, ep/200))
+        # reward_factor = 5 + (min(10, ep/200))
         # TO TRY
-        # reward_factor = 10 + (min(20, ep/400))
-        reward += lines_cleared * reward_factor
+        reward_factor = 15 + (min(25, ep/500))
+        reward += (lines_cleared**2) * reward_factor
 
         reward -= hole_weight * (new_holes - prev_holes)
         reward -= bumpiness_weight * (new_bumpiness - prev_bumpiness)
         reward -= height_weight * (new_height - prev_height)
 
         if self.game_ended:
-            reward -= 10
+            reward -= 5
 
         reward += 0.01
 

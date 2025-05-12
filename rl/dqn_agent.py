@@ -20,22 +20,6 @@ class QNetwork(nn.Module):
             nn.Linear(128, output_dim)
         )
     def forward(self, x): return self.net(x)
-    
-# class ReplayBuffer():
-#     def __init__(self, capacity):
-#         self.buffer = deque(maxlen=capacity)
-
-#     def push(self, state, action, reward, next_state, done):
-#         self.buffer.append((state, action, reward, next_state, done))
-
-#     def sample(self, batch_size):
-#         return random.sample(self.buffer, batch_size)
-
-#     def size(self):
-#         return len(self.buffer)
-
-import numpy as np
-import random
 
 class SumTree:
     """Binary tree where parent’s value = sum of children. Leaf nodes store priorities."""
@@ -136,6 +120,25 @@ class PrioritizedReplayBuffer:
 
     def __len__(self):
         return self.tree.size
+    
+class ReplayBuffer():
+    def __init__(self, capacity):
+        self.buffer = deque(maxlen=capacity)
+
+    def push(self, state, action, reward, next_state, done):
+        self.buffer.append((state, action, reward, next_state, done))
+
+    def sample(self, batch_size):
+        return random.sample(self.buffer, batch_size)
+
+    def size(self):
+        return len(self.buffer)
+
+    def clear(self):
+        self.buffer.clear()
+
+    def get_all(self):
+        return list(self.buffer)
 
 class DQN_Agent():
     def __init__(self, state_size=223, action_size=6, device='cpu'):
@@ -152,6 +155,7 @@ class DQN_Agent():
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=1e-4)
         #self.replay_buffer = ReplayBuffer(capacity=100000)
         self.replay_buffer = PrioritizedReplayBuffer(capacity=100000, alpha=0.6) # 100k size buffer (for 100k games training)
+        self.t_buffer = ReplayBuffer(capacity=1000)
 
         self.batch_size = 64
         self.gamma = 0.99
@@ -163,7 +167,7 @@ class DQN_Agent():
         self.epsilon_start = 1
         self.epsilon_decay_steps = 80000 # 80k
 
-        self.update_target_every = 1500 # 1k
+        self.update_target_every = 1000 # 1k
         self.step_count = 0
         self.last_loss = 0
 
@@ -301,7 +305,7 @@ class DQN_Agent():
         self.last_loss = loss.item()
 
 class DQNTrainingLogger:
-    def __init__(self, log_dir="logs"):
+    def __init__(self, log_dir="logs7"):
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)
 

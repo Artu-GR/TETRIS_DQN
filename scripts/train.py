@@ -3,6 +3,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 import pygame
+import random
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -19,14 +20,12 @@ def train_model(episodes=5000):
     state_size = env.get_state().shape[0]
     action_size = env.action_space.n
 
-    #writer = SummaryWriter(log_dir="runs6/tetris_dqn")
-
     agent = dqn_agent.DQN_Agent(state_size, action_size) # (223, 6)
 
     clock = pygame.time.Clock()
 
     start_episode = 0
-    ckpt_path     = "checkpoint.pth.tar"
+    ckpt_path     = "checkpoints/checkpoint.pth.tar"
     lines = 0
     
     # try:
@@ -65,10 +64,6 @@ def train_model(episodes=5000):
                     pygame.quit()
                     sys.exit()
 
-            # state_tensor = torch.FloatTensor(state).unsqueeze(0).to(agent.device)
-            # q_values = agent.q_network(state_tensor)
-            #print(f"Q-values for current state: {q_values.detach().cpu().numpy()}")
-
             action = agent.select_action(state)
             next_state, reward, done, info = env.step(ep, action, gpx)
             # if done:
@@ -100,25 +95,20 @@ def train_model(episodes=5000):
         # pygame.display.flip()
 
         print(f"Episode {ep} | Total Reward: {total_reward: .3f} | Epsilon: {agent.epsilon:.3f} | Loss: {agent.last_loss:.3f} | Total lines cleared: {tot_lines:.3f} | Buffer size: {len(agent.replay_buffer):.3f}")
-        
-        # writer.add_scalar("Reward/Total", total_reward, ep)
-        # writer.add_scalar("Epsilon", agent.epsilon, ep)
-        # writer.add_scalar("Loss", agent.last_loss, ep)
 
         logger.log_reward(total_reward)
         logger.log_loss(agent.last_loss)
         logger.log_param_change(agent.q_network, agent.target_network)
         #logger.log_q_diff(agent.q_diff.item())
 
-        #if ep % agent.update_target_every == 0: #every 1000 games save a record
-        if ep % 1000 == 0:
-            torch.save(agent.q_network.state_dict(), f"models6/dqn_episode_{ep}.pth")
+        if ep % agent.update_target_every == 0: #every 1000 games save a record
+        #if ep % 1000 == 0:
+            torch.save(agent.q_network.state_dict(), f"models7/dqn_episode_{ep}.pth")
             logger.save()
             logger.plot(ep, save_only=True)
 
 
-    #writer.close()
-    torch.save(agent.q_network.state_dict(), f"models6/trained_model.pth")
+    torch.save(agent.q_network.state_dict(), f"models7/trained_model.pth")
     utils.save_checkpoint({
             'epoch': episodes,
             'state_dict': agent.q_network.state_dict(),
@@ -127,8 +117,7 @@ def train_model(episodes=5000):
             'lines_cleared': tot_lines
         })
     
-    logger.plot(10000, save_only=False)
+    logger.plot(episodes, save_only=True)
 
 if __name__ == '__main__': 
-    train_model(episodes=10000) # 10k
-    #train_model(episodes=100000) # 100k
+    train_model(episodes=100000) # 100k
