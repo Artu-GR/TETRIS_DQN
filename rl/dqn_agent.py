@@ -72,10 +72,6 @@ class PrioritizedReplayBuffer:
         self.alpha = alpha
         self.eps   = 1e-6  # small amount to avoid zero priority
 
-    # def push(self, transition, td_error=None):
-    #     # new transitions get max priority so they’re likely sampled at least once
-    #     priority = (abs(td_error) + self.eps)**self.alpha if td_error is not None else self.tree.tree.max() or 1.0
-    #     self.tree.add(priority, transition)
     def push(self, transition, td_error=None):
         max_priority = self.tree.tree.max()
         if max_priority == 0:
@@ -141,7 +137,7 @@ class ReplayBuffer():
         return list(self.buffer)
 
 class DQN_Agent():
-    def __init__(self, state_size=223, action_size=6, device='cpu'):
+    def __init__(self, state_size=235, action_size=41, device='cpu'):
         self.state_size = state_size
         self.action_size = action_size
         self.device = device
@@ -159,13 +155,14 @@ class DQN_Agent():
 
         self.batch_size = 64
         self.gamma = 0.99
+        self.tau = 0.001
 
         #Epsilon decay handling
         self.epsilon = 1.0
         self.epsilon_decay = 0.997
         self.epsilon_min = 0.05
         self.epsilon_start = 1
-        self.epsilon_decay_steps = 80000 # 80k
+        self.epsilon_decay_steps = 80000 # set to 80% of episodes, default value 80k
 
         self.update_target_every = 1000 # 1k
         self.step_count = 0
@@ -173,6 +170,7 @@ class DQN_Agent():
 
         self.n_step = 3
         self.n_buffer = deque(maxlen=self.n_step)
+        self.checkpoint_path = 'chkpts/'
 
     def select_action(self, state):
         if random.random() <= self.epsilon:
@@ -186,7 +184,6 @@ class DQN_Agent():
 
     def store_transition(self, state, action, reward, next_state, done):
         # build transition tuple
-        #td_error = reward + (np.random.rand() * 0.7)
         transition = (state, action, reward, next_state, done)
 
         # n-step logic (unchanged)
@@ -234,8 +231,13 @@ class DQN_Agent():
                 break
         return R, next_state, done
 
+    def soft_update(self):
+        for target_param, local_param in zip(self.target_network.parameters(), self.q_network.parameters()):
+            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+
     def update_target_network(self):
-        self.target_network.load_state_dict(self.q_network.state_dict())
+        self.soft_update()
+        #self.target_network.load_state_dict(self.q_network.state_dict())
 
     def update(self, episode, beta=0.4):        
         # 1) don’t start unless we can sample a full batch
@@ -304,8 +306,24 @@ class DQN_Agent():
         )
         self.last_loss = loss.item()
 
+    def save_checkpoint(self, episode):
+        torch.save({
+            'episode': episode,
+            'model_state_dict': self.q_network.state_dict(),
+            'target_state_dict': self.target_network.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+        }, f"{self.checkpoint_path}/checkpoint_ep{episode}.pt")
+
+    def load_checkpoint(self, path):
+        checkpoint = torch.load(path)
+        self.q_network.load_state_dict(checkpoint['model_state_dict'])
+        self.target_network.load_state_dict(checkpoint['target_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        print(f"Resumed from episode {checkpoint['episode']}")
+        return checkpoint['episode']
+
 class DQNTrainingLogger:
-    def __init__(self, log_dir="logs7"):
+    def __init__(self, log_dir="logs10"):
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)
 

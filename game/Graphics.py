@@ -2,6 +2,7 @@ import pygame
 import random
 
 from .TetrisEngine import GameState
+from scripts import test
 
 pygame.init()
 pygame.mixer.init()
@@ -137,11 +138,14 @@ class Graphics():
                         waiting = False  # Salir del bucle cuando se presiona una tecla / Continuar con el juego
                         pygame.mixer.music.stop()
                         self.main()
-                    # elif (505 <= row <= 565) and (281 <= col <= 521):
-                    #     # AUTO-PLAY (AI)
-                    #     self.main('AI')
-                    #     #print("Autoplay selected")
-                    #     pass
+                    elif (505 <= row <= 565) and (281 <= col <= 521):
+                        # AUTO-PLAY (AI)
+                        pygame.mixer.music.stop()
+                        pygame.mixer.music.load('assets/audio/TetrisMusic.mp3')
+                        pygame.mixer.music.play(-1)
+                        test.auto_play(self)
+                        #print("Autoplay selected")
+                        pass
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         waiting = False  # Salir del bucle cuando se presiona una tecla

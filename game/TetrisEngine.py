@@ -88,13 +88,34 @@ class GameState(): #10x20
         return self.board
     
     def place_piece(self, rotation, col, gpx):
+        # clock = pygame.time.Clock()
+        # clock.tick(3)
         for _ in range(rotation % 4):
             self.rotatePiece()
+            if gpx is not None:
+                self.update()
+                gpx.drawBoard(None, self)
+                pygame.display.flip()
+                pygame.time.delay(50)
         while self.currentPiece.col < col:
             if self.moveRight() == False: break
+            if gpx is not None:
+                self.update()
+                gpx.drawBoard(None, self)
+                pygame.display.flip()
+                pygame.time.delay(50)
         while self.currentPiece.col > col:
             if self.moveLeft() == False: break
+            if gpx is not None:
+                self.update()
+                gpx.drawBoard(None, self)
+                pygame.display.flip()
+                pygame.time.delay(50)
         lines_cleared = self.dropPiece(return_state=True)
+        if gpx is not None:
+            self.update()
+            gpx.drawBoard(None, self)
+            pygame.display.flip()
 
         return lines_cleared
 
@@ -114,10 +135,12 @@ class GameState(): #10x20
         # bumpiness_weight = 0.05 * factor
         # height_weight = 0.1 * factor
 
+        # REMOVE HEIGHT PUNISHMENT AS IT FLATTENS ALL 'I'
+
         # TO TRY
-        hole_weight = 0.05 * factor
+        hole_weight = 0.04 * factor
         bumpiness_weight = 0.0125 * factor
-        height_weight = 0.025 * factor
+        #height_weight = 0.025 * factor
 
         # reward_factor = 5 + (min(10, ep/200))
         # TO TRY
@@ -126,7 +149,7 @@ class GameState(): #10x20
 
         reward -= hole_weight * (new_holes - prev_holes)
         reward -= bumpiness_weight * (new_bumpiness - prev_bumpiness)
-        reward -= height_weight * (new_height - prev_height)
+        #reward -= height_weight * (new_height - prev_height)
 
         if self.game_ended:
             reward -= 5

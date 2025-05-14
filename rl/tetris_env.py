@@ -5,15 +5,25 @@ from game import TetrisEngine
 from gym import spaces
 
 
+# piece_map = {
+#     "I": 1,  # Example: I-piece -> 1
+#     "O": 2,  # Example: O-piece -> 2
+#     "T": 3,  # Example: T-piece -> 3
+#     "L": 4,  # Example: L-piece -> 4
+#     "J": 5,  # Example: J-piece -> 5
+#     "S": 6,  # Example: S-piece -> 6
+#     "Z": 7,  # Example: Z-piece -> 7
+#     0: 0   # Empty space -> 0
+# }
+
 piece_map = {
-    "I": 1,  # Example: I-piece -> 1
-    "O": 2,  # Example: O-piece -> 2
-    "T": 3,  # Example: T-piece -> 3
-    "L": 4,  # Example: L-piece -> 4
-    "J": 5,  # Example: J-piece -> 5
-    "S": 6,  # Example: S-piece -> 6
-    "Z": 7,  # Example: Z-piece -> 7
-    0: 0   # Empty space -> 0
+    "I": [1,0,0,0,0,0,0],  # Example: I-piece -> 1
+    "O": [0,1,0,0,0,0,0],  # Example: O-piece -> 2
+    "T": [0,0,1,0,0,0,0],  # Example: T-piece -> 3
+    "L": [0,0,0,1,0,0,0],  # Example: L-piece -> 4
+    "J": [0,0,0,0,1,0,0],  # Example: J-piece -> 5
+    "S": [0,0,0,0,0,1,0],  # Example: S-piece -> 6
+    "Z": [0,0,0,0,0,0,1],  # Example: Z-piece -> 7
 }
 
 class TetrisEnv():
@@ -24,7 +34,7 @@ class TetrisEnv():
 
         # PAIR (rotations (%4), end_column)
         self.high_level_actions = [(rot, c) for rot in range(4) for c in range(self.engine.cols)]
-        self.high_level_actions.append(('C', None))
+        #self.high_level_actions.append(('C', None)) PROMPET SEVERAL ISSUES, SO NO HOLDING PIECE ALLOWED FOR THE MODEL
         self.action_space = spaces.Discrete(len(self.high_level_actions))
 
     def reset_game(self):
@@ -32,20 +42,22 @@ class TetrisEnv():
         return self.get_state()
 
     def get_state(self):
-        board = np.array([[piece_map[cell] for cell in row] for row in self.engine.board]).flatten()
+        # board = np.array([[piece_map[cell] for cell in row] for row in self.engine.board]).flatten()
+        board = np.array([[0 if cell == 0 else 1 for cell in row] for row in self.engine.board]).flatten()
 
         #piece = self.engine.currentPiece
         current_piece = piece_map[self.engine.currentPiece.type]
 
         next_pieces = [piece_map[piece.type] for piece in self.engine.nextPieces]
-        hold_piece = 0 if not self.engine.holdPiece else piece_map[self.engine.holdPiece.type]
+        hold_piece = np.zeros(7) if not self.engine.holdPiece else piece_map[self.engine.holdPiece.type]
 
         #current_score = self.engine.score
 
-        state = np.concatenate([board, [current_piece], next_pieces, [hold_piece]]).astype(np.float32)
+        # state = np.concatenate([board, [current_piece], next_pieces, [hold_piece]]).astype(np.float32)
+        state = np.concatenate([board, current_piece, *next_pieces, hold_piece]).astype(np.float32)
         return state
     
-    def step(self, ep, action, gpx):
+    def step(self, ep, action, gpx=None):
         # action_str = self.action_map[action]
         lines_cleared = 0
 
