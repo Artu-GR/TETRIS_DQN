@@ -323,7 +323,7 @@ class DQN_Agent():
         return checkpoint['episode']
 
 class DQNTrainingLogger:
-    def __init__(self, log_dir="logs10"):
+    def __init__(self, log_dir="logs11"):
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)
 

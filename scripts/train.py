@@ -21,16 +21,16 @@ def train_model(episodes=5000):
     print(state_size, " ", action_size)
 
     agent = dqn_agent.DQN_Agent(state_size, action_size) # (235, 41)
-    agent.epsilon_decay_steps = 0.8 * episodes
+    agent.epsilon_decay_steps = 0.75 * episodes
 
     clock = pygame.time.Clock()
 
     start_episode = 0
-    # episode = 140000
-    # ckpt_path     = f"checkpoints/checkpoint_ep{episode}.pt"
+    episode = 50000
+    ckpt_path     = f"chkpts/checkpoint_ep{episode}.pt"
     lines = 0
     
-    # start_episode = agent.load_checkpoint(ckpt_path)
+    start_episode = agent.load_checkpoint(ckpt_path)
 
     tot_lines = 0
     tot_lines += lines
@@ -91,9 +91,9 @@ def train_model(episodes=5000):
             logger.plot(ep, save_only=True)
 
 
-    torch.save(agent.q_network.state_dict(), f"models10/trained_model.pth")
+    torch.save(agent.q_network.state_dict(), f"models11/trained_model.pth")
     
     logger.plot(episodes, save_only=True)
 
 if __name__ == '__main__': 
-    train_model(episodes=10000) # 100k base training
+    train_model(episodes=70000) # 100k base training
