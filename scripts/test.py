@@ -19,7 +19,7 @@ def auto_play(gpx=None):
     agent = dqn_agent.DQN_Agent(state_size=env.get_state().shape[0], action_size=env.action_space.n)
 
     # Load the trained model weights
-    checkpoint_path = "models10/trained_model.pth"
+    checkpoint_path = "models11/trained_model.pth"
     agent.q_network.load_state_dict(torch.load(checkpoint_path, map_location=torch.device('cpu')))
     agent.q_network.eval()
 
@@ -33,7 +33,7 @@ def auto_play(gpx=None):
     gpx.draw_training(env.engine)
 
     while not done:
-        clock.tick(30)
+        clock.tick(10)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -45,7 +45,8 @@ def auto_play(gpx=None):
         print(env.high_level_actions[action])
 
         if done:
-            gpx.draw_GameOver(env.engine)
+            #gpx.draw_GameOver(env.engine)
+            gpx.wait_ending_screen(env.engine)
         else:
             env.engine.update()
             gpx.drawBoard(None, env.engine)

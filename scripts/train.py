@@ -21,12 +21,12 @@ def train_model(episodes=5000):
     print(state_size, " ", action_size)
 
     agent = dqn_agent.DQN_Agent(state_size, action_size) # (235, 41)
-    agent.epsilon_decay_steps = 0.75 * episodes
+    agent.epsilon_decay_steps = 0.85 * episodes
 
     clock = pygame.time.Clock()
 
     start_episode = 0
-    episode = 50000
+    episode = 100000
     ckpt_path     = f"chkpts/checkpoint_ep{episode}.pt"
     lines = 0
     
@@ -96,4 +96,4 @@ def train_model(episodes=5000):
     logger.plot(episodes, save_only=True)
 
 if __name__ == '__main__': 
-    train_model(episodes=70000) # 100k base training
+    train_model(episodes=150000) # 100k base training

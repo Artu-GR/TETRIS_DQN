@@ -325,10 +325,10 @@ class GameState(): #10x20
                 self.board.insert(0, [0] * self.cols)  # Insert an empty row at the top
                 count += 1
         # LINES TO UNCOMMENT
-        # if count == 4:
-        #     TetrisSFX.play()
-        # elif count >= 1:
-        #     ClearSFX.play()
+        if count == 4:
+            TetrisSFX.play()
+        elif count >= 1:
+            ClearSFX.play()
         self.score += 100*count
 
         if return_count:
@@ -363,7 +363,7 @@ class GameState(): #10x20
 
         if self.validate_rotation(new_positions):
             # LINES TO UNCOMMENT
-            # RotationSFX.play()
+            RotationSFX.play()
             self.currentPiece.cells = new_positions
             self.currentPiece.shape = new_shape
             self.log.append('r') # as R is for Right

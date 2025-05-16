@@ -40,6 +40,7 @@ class Graphics():
         self.side_cols = 4
 
     def drawTitleScreen(self):
+        pygame.event.clear()
         pygame.mixer.music.load('assets/audio/TitleScreenMusic.mp3')
         pygame.mixer.music.play(-1)
         screen = pygame.display.set_mode((self.screen_w + self.side_width * 2,
@@ -249,6 +250,7 @@ class Graphics():
                         del(gs)
                         waiting = False  # Salir del bucle cuando se presiona una tecla
                         pygame.mixer.music.stop()
+                        pygame.event.clear()
                         self.drawTitleScreen()
 
     def play_music(self):
