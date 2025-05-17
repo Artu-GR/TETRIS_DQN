@@ -15,7 +15,6 @@ TetrisSFX = pygame.mixer.Sound("assets/audio/sfx/TetrisClear.mp3")
 
 class Graphics():
     def __init__(self):
-        #self.pieces = []
         self.screen_w = 300
         self.screen_h = 600
         self.rows = 20

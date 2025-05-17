@@ -1,8 +1,6 @@
 import time
 import random
-import copy
 import pygame
-#import numpy as np
 
 from .Piece import Piece
 
@@ -17,7 +15,7 @@ class GameState(): #10x20
         self.prev_board = [[0] * 10 for _ in range(20)]
         self.rows = 20
         self.cols = 10
-        self.log = [] # For training purposes log[-1]
+        self.log = [] # For training purposes
         self.images = ['I', 'O', 'T', 'L', 'J', 'S', 'Z']
         self.currentPiece = None
         self.projected_coords = []
@@ -78,18 +76,8 @@ class GameState(): #10x20
         self.spawnPieces()
 
         self.game_ended = False
-
-    def initialize_board(self):
-        # Logic to initialize a new game board
-        return [[0] * 10 for _ in range(20)]  # Example: 20 rows, 10 columns
-    
-    def get_board(self):
-        # Return the current board
-        return self.board
     
     def place_piece(self, rotation, col, gpx):
-        # clock = pygame.time.Clock()
-        # clock.tick(3)
         for _ in range(rotation % 4):
             self.rotatePiece()
             if gpx is not None:
@@ -131,25 +119,18 @@ class GameState(): #10x20
         new_bumpiness, new_height = self.get_bumpiness_and_heights(new_board)
 
         factor = min(1.0, ep / 7000)
-        # hole_weight = 0.2 * factor
-        # bumpiness_weight = 0.05 * factor
-        # height_weight = 0.1 * factor
 
-        # REMOVE HEIGHT PUNISHMENT AS IT FLATTENS ALL 'I'
 
         # TO TRY
         hole_weight = 0.04 * factor
         bumpiness_weight = 0.0125 * factor
-        #height_weight = 0.025 * factor
 
-        # reward_factor = 5 + (min(10, ep/200))
         # TO TRY
         reward_factor = 15 + (min(25, ep/500))
         reward += (lines_cleared**2) * reward_factor
 
         reward -= hole_weight * (new_holes - prev_holes)
         reward -= bumpiness_weight * (new_bumpiness - prev_bumpiness)
-        #reward -= height_weight * (new_height - prev_height)
 
         if self.game_ended:
             reward -= 5
@@ -158,12 +139,6 @@ class GameState(): #10x20
 
         return reward
 
-        # reward = 0
-        # reward += lines_cleared*2.5 #[0, 10, 20, 30, 70][lines_cleared]
-        # #reward -= holes_pen*0.5
-
-        # return reward
-    
     def get_holes(self, board):
         holes = 0
         for col in range(len(board[0])):
@@ -197,9 +172,6 @@ class GameState(): #10x20
 
         self.currentPiece = self.nextPieces.pop(0) # 'K' 'L' 'O'
         
-        # Debugging
-        # print(self.currentPiece.type, end = " // ")
-        # print([k.type for k in self.nextPieces])
         if any(self.board[r][c] != 0 for r,c in self.currentPiece.get_cells()):
             print("Game Over!")
             self.game_ended = True # pygame.quit()
@@ -236,10 +208,6 @@ class GameState(): #10x20
                 if 0 <= r < 9 and 0 <= c < 4:
                     self.nextPiecesGrid[r][c] = type
 
-        # Debugging output
-        # print([p.type for p in self.nextPieces])
-        # for row in self.nextPiecesGrid:
-        #     print(row)
         self.getProjection()
 
     def update(self):
@@ -275,7 +243,6 @@ class GameState(): #10x20
             else:
                 self.lock_delay += 1
                 # Lock the piece and spawn a new one
-                # print("Locking piece")
                 if self.lock_delay >= self.LOCK_LIMIT:
                     self.placePiece()
 
@@ -320,11 +287,9 @@ class GameState(): #10x20
         count = 0
         for row in range(self.rows):
             if all(self.board[row][col] != 0 for col in range(self.cols)):  # Row is full
-                #BUSCAR LA FORMA DE LLAMAR DRAW_BOARD PARA VER EL TABLERO AL MOMENTO DE ELIMINAR LAS FILAS
                 self.board.pop(row)  # Remove the full row
                 self.board.insert(0, [0] * self.cols)  # Insert an empty row at the top
                 count += 1
-        # LINES TO UNCOMMENT
         if count == 4:
             TetrisSFX.play()
         elif count >= 1:
@@ -334,13 +299,11 @@ class GameState(): #10x20
         if return_count:
             if count:
                 print(f"*****\n{count} LINES CLEARED\n*****")
-                #time.sleep(2)
             return count
 
     def rotatePiece(self):
         new_shape = []
         new_positions = []
-        #print(self.currentPiece.cells, "**************")
 
         pivot = self.currentPiece.shape[2]
         
@@ -362,7 +325,6 @@ class GameState(): #10x20
         new_positions = self.currentPiece.get_cells(new_shape)
 
         if self.validate_rotation(new_positions):
-            # LINES TO UNCOMMENT
             RotationSFX.play()
             self.currentPiece.cells = new_positions
             self.currentPiece.shape = new_shape
@@ -387,8 +349,6 @@ class GameState(): #10x20
         for r, c in current_positions:
             self.board[r][c] = 0
 
-        # print("Rotating piece")
-
         # Update the board with the new rotated positions
         self.currentPiece.cells = new_pos
         
@@ -404,9 +364,7 @@ class GameState(): #10x20
             # Clear old position
             for r, c in current_positions:
                 self.board[r][c] = 0
-            
-            # print("Moving piece left")
-            
+                        
             # Move piece down
             self.currentPiece.col -= 1  
             
@@ -429,9 +387,7 @@ class GameState(): #10x20
             # Clear old position
             for r, c in current_positions:
                 self.board[r][c] = 0
-            
-            # print("Moving piece right")
-            
+                    
             # Move piece down
             self.currentPiece.col += 1  
             
@@ -454,9 +410,7 @@ class GameState(): #10x20
             # Clear old position
             for r, c in current_positions:
                 self.board[r][c] = 0
-            
-            # print("Moving piece down")
-            
+                        
             # Move piece down
             self.currentPiece.row += 1  
             
@@ -468,7 +422,6 @@ class GameState(): #10x20
             self.score += 1
         else:
             # Lock the piece and spawn a new one
-            # print("Locking piece")
             self.placePiece()
 
     def hold_Piece(self):
@@ -484,8 +437,6 @@ class GameState(): #10x20
             self.holdPiece = self.currentPiece
             self.spawnPieces()  # Spawn new piece after first hold
         else:
-            # for r, c in self.holdPiece.get_cells():
-            #     self.holdPieceGrid[r][c] = 0
             # Swap current piece with the held one
             self.currentPiece, self.holdPiece = self.holdPiece, self.currentPiece
             self.spawnHoldPiece()
@@ -496,7 +447,6 @@ class GameState(): #10x20
         self.hold_used = True
 
     def updateHoldGrid(self):
-        """ Updates the hold piece grid for previewing the held piece. """
         self.holdPieceGrid = [[0] * 4 for _ in range(2)]  # 2-row display
 
         if not self.holdPiece:
@@ -521,18 +471,12 @@ class GameState(): #10x20
             if 0 <= r < 2 and 0 <= c < 4:  # Prevent index errors
                 self.holdPieceGrid[r][c] = type
 
-        # Debugging output
-        # print("Hold Piece:", self.holdPiece.type)
-        # for row in self.holdPieceGrid:
-        #     print(row)
-
     def spawnHoldPiece(self):
         self.currentPiece = Piece(self.currentPiece.type)
         for r, c in self.currentPiece.get_cells():
             if self.board[r][c] != 0:  # Game over condition (spawn area occupied)
                 print("Game Over!")
                 self.game_ended = True #pygame.quit()
-                # exit()
             else:
                 self.board[r][c] = self.currentPiece.type
 
@@ -558,7 +502,6 @@ class GameState(): #10x20
                 current_positions = self.currentPiece.get_cells()  # Update current_positions to the new one
             else:
                 # Lock the piece in place and spawn a new piece
-                # print("Locking piece")
                 self.log.append('D')
                 self.drop_height = count
                 self.score += 2*count
