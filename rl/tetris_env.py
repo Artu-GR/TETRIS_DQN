@@ -4,18 +4,6 @@ import copy
 from game import TetrisEngine
 from gym import spaces
 
-
-# piece_map = {
-#     "I": 1,  # Example: I-piece -> 1
-#     "O": 2,  # Example: O-piece -> 2
-#     "T": 3,  # Example: T-piece -> 3
-#     "L": 4,  # Example: L-piece -> 4
-#     "J": 5,  # Example: J-piece -> 5
-#     "S": 6,  # Example: S-piece -> 6
-#     "Z": 7,  # Example: Z-piece -> 7
-#     0: 0   # Empty space -> 0
-# }
-
 piece_map = {
     "I": [1,0,0,0,0,0,0],  # Example: I-piece -> 1
     "O": [0,1,0,0,0,0,0],  # Example: O-piece -> 2
